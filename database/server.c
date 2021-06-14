@@ -84,7 +84,7 @@ int main(int argc ,char const *argv1[])
         exit(EXIT_FAILURE);
     }
 
-    if ((chdir("/home/fitrah1812/fp-sisop-B10-2021/")) < 0) {
+    if ((chdir("/home/fitrah1812/fp-sisop-B10-2021/database")) < 0) {
         exit(EXIT_FAILURE);
     }
 
