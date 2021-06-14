@@ -72,44 +72,49 @@ int main(int argc ,char const *argv1[])
     struct sockaddr_in new_addr;
     pthread_t tid;
     char buf[300];
+    pid_t pid;     
+    pid = fork();    
     char argv[300 + hadeh];
     int new_fd, ret_val;
     int server_fd = create_socket();
-    // if (tid < 0) {
-    //     exit(EXIT_FAILURE);
-    // }
+    if (pid < 0) {
+        exit(EXIT_FAILURE);
+    }
 
-    // /* Keluar saat fork berhasil
-    // * (nilai variabel pid adalah PID dari child process) */
-    // if (tid > 0) {
-    //     exit(EXIT_SUCCESS);
-    // }
+    /* Keluar saat fork berhasil
+    * (nilai variabel pid adalah PID dari child process) */
+    if (pid > 0) {
+        exit(EXIT_SUCCESS);
+    }
 
-    // umask(0);
+    umask(0);
 
-    // tid = setsid();
-    // if (tid < 0) {
-    //     exit(EXIT_FAILURE);
-    // }
+    pid = setsid();
+    if (pid < 0) {
+        exit(EXIT_FAILURE);
+    }
 
-    // if ((chdir("/")) < 0) {
-    //     exit(EXIT_FAILURE);
-    // }
+    if ((chdir("/")) < 0) {
+        exit(EXIT_FAILURE);
+    }
 
-    // close(STDIN_FILENO);
-    // close(STDOUT_FILENO);
-    // close(STDERR_FILENO);
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
 
     while (1) {
-        new_fd = accept(server_fd, (struct sockaddr *)&new_addr, &addrlen);
-        if (new_fd >= 0) {
-            printf("Koneksi terhubung dengan port: %d\n", new_fd-3);
-            pthread_create(&tid, NULL, &utama, (void *) &new_fd);
-        } else {
-            fprintf(stderr, "Koneksi gagal %s\n", strerror(errno));
+        while (1) {
+            new_fd = accept(server_fd, (struct sockaddr *)&new_addr, &addrlen);
+            if (new_fd >= 0) {
+                printf("Koneksi terhubung dengan port: %d\n", new_fd-3);
+                pthread_create(&tid, NULL, &utama, (void *) &new_fd);
+            } else {
+                fprintf(stderr, "Koneksi gagal %s\n", strerror(errno));
+            }
         }
-        //sleep(30);
+    sleep(30);
     }
+
     return 0;
 }
 
