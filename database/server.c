@@ -68,33 +68,23 @@ void pemisahfile(char *filepath, char *namafile, char *ext);
 
 int main(int argc ,char const *argv1[])
 {
-    socklen_t addrlen;
-    struct sockaddr_in new_addr;
-    pthread_t tid;
-    char buf[300];
-    pid_t pid;     
-    pid = fork();    
-    char argv[300 + hadeh];
-    int new_fd, ret_val;
-    int server_fd = create_socket();
+    pid_t pid,sid;     
+    pid = fork();
     if (pid < 0) {
         exit(EXIT_FAILURE);
     }
-
     /* Keluar saat fork berhasil
     * (nilai variabel pid adalah PID dari child process) */
     if (pid > 0) {
         exit(EXIT_SUCCESS);
     }
-
     umask(0);
-
-    pid = setsid();
-    if (pid < 0) {
+    sid = setsid();
+    if (sid < 0) {
         exit(EXIT_FAILURE);
     }
 
-    if ((chdir("/")) < 0) {
+    if ((chdir("/home/fitrah1812/fp-sisop-B10-2021/")) < 0) {
         exit(EXIT_FAILURE);
     }
 
@@ -102,7 +92,15 @@ int main(int argc ,char const *argv1[])
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
 
+    //setelah itu create
     while (1) {
+        socklen_t addrlen;
+        struct sockaddr_in new_addr;
+        pthread_t tid;
+        char buf[300];
+        char argv[300 + hadeh];
+        int new_fd, ret_val;
+        int server_fd = create_socket();
         while (1) {
             new_fd = accept(server_fd, (struct sockaddr *)&new_addr, &addrlen);
             if (new_fd >= 0) {
@@ -114,7 +112,6 @@ int main(int argc ,char const *argv1[])
         }
     sleep(30);
     }
-
     return 0;
 }
 
