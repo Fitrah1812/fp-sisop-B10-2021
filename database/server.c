@@ -119,7 +119,7 @@ void *utama(void *argv)
 {
     int fd = *(int *) argv;
     char cmd[300];
-    chdir("/home/fitrah1812/fp-sisop-B10-2021/server");
+    chdir("/home/fitrah1812/fp-sisop-B10-2021/database");
 
     while (recv(fd, cmd, 300, MSG_PEEK | MSG_DONTWAIT) != 0) {
         if (fd != socketawal) {
