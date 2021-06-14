@@ -52,7 +52,7 @@ bool cuek = false;
 //cek input tersebut sudah oke atau belum
 void *cekinput(void *fdc)
 {
-    chdir("/home/fitraharie/soal1/Client");
+    chdir("/home/fitrah1812/fp-sisop-B10-2021/database");
     int fd = *(int *) fdc;
     char message[gas] = {0};
 
@@ -75,7 +75,7 @@ void activeserver(int fd, char *input)
 void *cekoutput(void *fdc) 
 {
     //change directory 
-    chdir("/home/fitraharie/soal1/Client");
+    chdir("/home/fitrah1812/fp-sisop-B10-2021/client");
     int fd = *(int *) fdc;
     char message[gas] = {0};
 

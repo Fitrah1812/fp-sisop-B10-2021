@@ -75,30 +75,30 @@ int main(int argc ,char const *argv1[])
     char argv[300 + hadeh];
     int new_fd, ret_val;
     int server_fd = create_socket();
-    if (tid < 0) {
-        exit(EXIT_FAILURE);
-    }
+    // if (tid < 0) {
+    //     exit(EXIT_FAILURE);
+    // }
 
-    /* Keluar saat fork berhasil
-    * (nilai variabel pid adalah PID dari child process) */
-    if (tid > 0) {
-        exit(EXIT_SUCCESS);
-    }
+    // /* Keluar saat fork berhasil
+    // * (nilai variabel pid adalah PID dari child process) */
+    // if (tid > 0) {
+    //     exit(EXIT_SUCCESS);
+    // }
 
-    umask(0);
+    // umask(0);
 
-    tid = setsid();
-    if (tid < 0) {
-        exit(EXIT_FAILURE);
-    }
+    // tid = setsid();
+    // if (tid < 0) {
+    //     exit(EXIT_FAILURE);
+    // }
 
-    if ((chdir("/")) < 0) {
-        exit(EXIT_FAILURE);
-    }
+    // if ((chdir("/")) < 0) {
+    //     exit(EXIT_FAILURE);
+    // }
 
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
+    // close(STDIN_FILENO);
+    // close(STDOUT_FILENO);
+    // close(STDERR_FILENO);
 
     while (1) {
         new_fd = accept(server_fd, (struct sockaddr *)&new_addr, &addrlen);
@@ -108,7 +108,7 @@ int main(int argc ,char const *argv1[])
         } else {
             fprintf(stderr, "Koneksi gagal %s\n", strerror(errno));
         }
-         sleep(30);
+        //sleep(30);
     }
     return 0;
 }
@@ -117,7 +117,7 @@ void *utama(void *argv)
 {
     int fd = *(int *) argv;
     char cmd[300];
-    chdir("/home/fitraharie/soal1/Server");
+    chdir("/home/fitrah1812/fp-sisop-B10-2021/server");
 
     while (recv(fd, cmd, 300, MSG_PEEK | MSG_DONTWAIT) != 0) {
         if (fd != socketawal) {
