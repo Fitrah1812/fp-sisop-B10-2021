@@ -52,7 +52,7 @@ bool cuek = false;
 //cek input tersebut sudah oke atau belum
 void *cekinput(void *fdc)
 {
-    chdir("/home/fitrah1812/fp-sisop-B10-2021/database");
+    chdir("/home/fitrah1812/fp-sisop-B10-2021/client");
     int fd = *(int *) fdc;
     char message[gas] = {0};
 
