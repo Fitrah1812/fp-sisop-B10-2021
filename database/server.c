@@ -21,15 +21,8 @@ char curr_db[DATA_BUFFER] = {0};
  
 const int SIZE_BUFFER = sizeof(char) * DATA_BUFFER;
 const char *currDir = "/home/fitrah/fp-sisop-B10-2021/database/databases";
-
-//global variable
 char *databaseName;
-
-
-// Socket setup
 int create_tcp_server_socket();
- 
-// Routes & controller
 void *routes(void *argv);
 bool login(int fd, char *username, char *password);
 void registration(int fd, char *username, char *password);
@@ -40,8 +33,6 @@ void createTable(int fd, char parsed[20][DATA_BUFFER]);
 void dropDB(int fd,char* databaseName);
 void dropTable(int fd, char* tableName);
 void insert(int fd, char parsed[20][DATA_BUFFER]);
-
-// Services
 int getInput(int fd, char *prompt, char *storage);
 int getUserId(char *username, char *password);
 int getLastId(char *db_name, char *table);
@@ -51,7 +42,6 @@ FILE *getTable(char *db_name, char *table, char *cmd);
 bool dbExist(int fd, char *db_name, bool printError);
 FILE *getOrMakeTable(char *db_name, char *table, char *cmd, char *collumns);
 bool tableExist(int fd, char *db_name, char *table, bool printError);
-
 
 int main()
 {
