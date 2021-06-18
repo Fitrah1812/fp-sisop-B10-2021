@@ -16,26 +16,25 @@ int curr_id = -1;
 char curr_db[DATA_BUFFER] = {0};
 const int SIZE_BUFFER = sizeof(char) * DATA_BUFFER;
 const char *currDir = "/home/fitrah1812/fp-sisop-B10-2021/databaseku/databases";
-int create_tcp_server_socket();
+int create_socket();
 void *routes(void *argv);
 bool login(int fd, char *username, char *password);
 void regist(int fd, char *username, char *password);
-void useDB(int fd, char *db_name);
-void grantDB(int fd, char *db_name, char *username);
-void createDB(int fd, char *db_name);
+void DatabaseUse(int fd, char *db_name);
+void AddPermission(int fd, char *db_name, char *username);
+void BuatDB(int fd, char *db_name);
 void createTable(int fd, char parsed[20][DATA_BUFFER]);
-int getInput(int fd, char *prompt, char *storage);
-int getUserId(char *username, char *password);
-int getLastId(char *db_name, char *table);
+int AmbilUserAwal(char *username, char *password);
+int AmbilUserAkhir(char *db_name, char *table);
 void explode(char *string, char storage[20][DATA_BUFFER], const char *delimiter);
 void changeCurrDB(int fd, const char *db_name);
 FILE *getTable(char *db_name, char *table, char *cmd);
 bool dbExist(int fd, char *db_name, bool printError);
 FILE *getOrMakeTable(char *db_name, char *table, char *cmd, char *collumns);
-bool tableExist(int fd, char *db_name, char *table, bool printError);
+bool CekTabel(int fd, char *db_name, char *table, bool printError);
 void insert(int fd, char parsed[20][DATA_BUFFER]);
-char *temp_databaseName;
-void dropTabel(int fd,char *databaseName,char *tableName);
+char *temp_databaseName ={0};
+void tabel(int fd,char *databaseName,char *tableName);
 
 
 int main()
@@ -78,7 +77,7 @@ int main()
         struct sockaddr_in new_addr;
         pthread_t tid;
         char buf[DATA_BUFFER];
-        int server_fd = create_tcp_server_socket();
+        int server_fd = create_socket();
         int new_fd;
  
         while (1) 
@@ -198,7 +197,7 @@ void dropDatabase(int fd, char* databaseName)
 //     fclose(fptr_logs);
 // }
 
-void dropTabel(int fd, char *database, char *table) {
+void tabel(int fd, char *database, char *table) {
     char file[1024];
     sprintf(file, "%s/%s", database, table);
     if (access(file, F_OK) != 0) {
@@ -249,7 +248,7 @@ void dropTable(int fd, char *table){
         write(fd, "no database used\n", SIZE_BUFFER);
         return;
     }
-    if(tableExist(fd, curr_db, table, true)){
+    if(CekTabel(fd, curr_db, table, true)){
         char path[DATA_BUFFER];
         sprintf(path, "./%s/$s.csv", curr_db, table);
         remove(path);
@@ -455,7 +454,7 @@ void *routes(void *argv)
                 regist(fd, parsed[2], parsed[5]);
             }
             else if (strcmp(parsed[1], "DATABASE") == 0) {
-                createDB(fd, parsed[2]);
+                BuatDB(fd, parsed[2]);
             }
             else if (strcmp(parsed[1], "TABLE") == 0) {
                 createTable(fd, parsed);
@@ -463,11 +462,10 @@ void *routes(void *argv)
             else write(fd, "Invalid query on CREATE command\n\n", SIZE_BUFFER);
         }
         else if (strcmp(parsed[0], "USE") == 0) {
-            // strcpy(temp_databaseName,parsed[1]);
-            useDB(fd, parsed[1]);
+            DatabaseUse(fd, parsed[1]);
         }
         else if (strcmp(parsed[0], "GRANT") == 0) {
-            grantDB(fd, parsed[2], parsed[4]);
+            AddPermission(fd, parsed[2], parsed[4]);
         }
         else if (strcmp(parsed[0], "DROP") == 0)
         {
@@ -476,7 +474,7 @@ void *routes(void *argv)
             }
             else if(strcmp(parsed[1], "TABLE") == 0)
             {
-                dropTabel(fd,temp_databaseName,parsed[2]);
+                tabel(fd,temp_databaseName,parsed[2]);
             }
         }
         else if(strcmp(parsed[0], "INSERT")==0){
@@ -599,7 +597,7 @@ void createTable(int fd, char parsed[20][DATA_BUFFER])
 //     fprintf(fptr_logs, "%s\r\n", content);
 //     fclose(fptr_logs);
 // }
-void createDB(int fd, char *db_name)
+void BuatDB(int fd, char *db_name)
 {
     if (dbExist(fd, db_name, false)) {
         write(fd, "Error::Database already exists\n\n", SIZE_BUFFER);
@@ -657,7 +655,7 @@ void createDB(int fd, char *db_name)
 //     fclose(fptr_logs);
 // }
 
-void grantDB(int fd, char *db_name, char *username)
+void AddPermission(int fd, char *db_name, char *username)
 {
     if (curr_id != 0 || strcmp(db_name, "config") == 0) {
         write(fd, "Error::Forbidden action\n\n", SIZE_BUFFER);
@@ -666,7 +664,7 @@ void grantDB(int fd, char *db_name, char *username)
     if (!dbExist(fd, db_name, true)) {
         return;
     }
-    int target_id = getUserId(username, NULL);
+    int target_id = AmbilUserAwal(username, NULL);
     if (target_id == -1) {
         write(fd, "Error::User not found\n\n", SIZE_BUFFER);
         return;
@@ -731,7 +729,7 @@ void grantDB(int fd, char *db_name, char *username)
 //     fprintf(fptr_logs, "%s\r\n", content);
 //     fclose(fptr_logs);
 // }
-void useDB(int fd, char *db_name)
+void DatabaseUse(int fd, char *db_name)
 {
     // strcpy(temp_databaseName,db_name);
 
@@ -809,7 +807,7 @@ void useDB(int fd, char *db_name)
 FILE *getTable(char *db_name, char *table, char *cmd)
 {
     FILE *fp = NULL;
-    if (tableExist(-1, db_name, table, false)) {
+    if (CekTabel(-1, db_name, table, false)) {
         char path[DATA_BUFFER];
         sprintf(path, "./%s/%s.csv", db_name, table);
         fp = fopen(path, cmd);
@@ -916,12 +914,12 @@ void regist(int fd, char *username, char *password)
         return;
     }
     FILE *fp = getOrMakeTable("config", "users", "a", "id,username,password");
-    int id = getUserId(username, password);
+    int id = AmbilUserAwal(username, password);
  
     if (id != -1) {
         write(fd, "Error::User is already registered\n\n", SIZE_BUFFER);
     } else {
-        id = getLastId("config", "users") + 1;
+        id = AmbilUserAkhir("config", "users") + 1;
         fprintf(fp, "%d,%s,%s\n", id, username, password);
         write(fd, "Register success\n\n", SIZE_BUFFER);
     }
@@ -978,7 +976,7 @@ bool login(int fd, char *username, char *password)
     } else { // Check data in DB
         FILE *fp = getTable("config", "users", "r");
         if (fp != NULL) {
-            id = getUserId(username, password);
+            id = AmbilUserAwal(username, password);
             fclose(fp);
         }
     }
@@ -1130,7 +1128,7 @@ bool dbExist(int fd, char *db_name, bool printError)
 //     fclose(fptr_logs);
 // }
 
-bool tableExist(int fd, char *db_name, char *table, bool printError)
+bool CekTabel(int fd, char *db_name, char *table, bool printError)
 {
     struct stat s;
     char path[DATA_BUFFER];
@@ -1180,7 +1178,7 @@ bool tableExist(int fd, char *db_name, char *table, bool printError)
 //     fclose(fptr_logs);
 // }
 
-int getUserId(char *username, char *password)
+int AmbilUserAwal(char *username, char *password)
 {
     int id = -1;
     FILE *fp = getTable("config", "users", "r");
@@ -1247,7 +1245,7 @@ int getUserId(char *username, char *password)
 // }
 
 
-int getLastId(char *db_name, char *table)
+int AmbilUserAkhir(char *db_name, char *table)
 {
     int id = 1;
     FILE *fp = getTable(db_name, table, "r");
@@ -1354,7 +1352,7 @@ void explode(char string[], char storage[20][DATA_BUFFER], const char *delimiter
 //     fclose(fptr_logs);
 // }
 
-int create_tcp_server_socket()
+int create_socket()
 {
     struct sockaddr_in saddr;
     int fd, ret_val;
