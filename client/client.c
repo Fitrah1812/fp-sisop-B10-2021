@@ -1,40 +1,45 @@
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <pthread.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <errno.h>
+#include <netdb.h>
+#include <netinet/in.h>
+
  
 #define DATA_BUFFER 200
- 
+
+//global variable
 const int SIZE_BUFFER = sizeof(char) * DATA_BUFFER;
 char username[DATA_BUFFER] = {0};
 char type[DATA_BUFFER] = {0};
 bool wait = false;
  
-// SETUP
-void *handleInput(void *clientSockets);
-void *cekoutput(void *clientSockets);
+// setup function
+void *handleInput(void *client_sockets);
+void *checkOutput(void *client_sockets);
 void serverOutput(int fd, char *input);
  
-int create_socket()
-{
+
+
+int createSocket(){
+
     struct sockaddr_in saddr;
     int fd, ret_val;
     int opt = 1;
     struct hostent *local_host;
     fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-    if (fd == -1) {
+    if (fd == -1){
         fprintf(stderr, "socket failed [%s]\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
         perror("setsockopt");
         exit(EXIT_FAILURE);
     }
@@ -53,8 +58,10 @@ int create_socket()
     return fd;
 }
 
-bool login(int fd, int argc, char *argv[])
-{
+
+
+bool loginStatus(int fd, int argc, char *argv[]){
+
     char buf[DATA_BUFFER];
     if (geteuid() == 0) { // root
         write(fd, "LOGIN root root", SIZE_BUFFER);
@@ -83,8 +90,10 @@ bool login(int fd, int argc, char *argv[])
     return strcmp(buf, "Login success\n") == 0;
 }
  
-bool isValid(char *message)
-{
+
+
+bool isValid(char *message){
+
     /*
     * Cek:
     * 1. Jumlah kata
@@ -95,21 +104,23 @@ bool isValid(char *message)
     * 
     * Jika return bernilai false, message tidak dikirim ke server
     */
-    if (strcmp(message, "quit") == 0) {
+
+    if (strcmp(message, "quit") == 0){
         puts("Good bye :3");
         exit(EXIT_SUCCESS);
     }
-    else {
+    else{
         puts("Invalid query");
         return false;
     }
     return true;
 }
  
-/**    SETUP    **/
-void *handleInput(void *clientSockets)
-{
-    int fd = *(int *) clientSockets;
+
+
+void *handleInput(void *client_sockets){
+
+    int fd = *(int *) client_sockets;
     char message[DATA_BUFFER] = {0};
  
     while (1) {
@@ -126,37 +137,16 @@ void *handleInput(void *clientSockets)
             puts("Good bye :3");
             exit(EXIT_SUCCESS);
         }
- 
-        // if (isValid(message)) {
-            send(fd, message, SIZE_BUFFER, 0);
-        // }
+        send(fd, message, SIZE_BUFFER, 0);
         wait = true;
     }
 }
 
- 
-int main(int argc, char *argv[])
-{
-    pthread_t tid[2];
-    int clientSockets = create_socket();
- 
-    if (!login(clientSockets, argc, argv)) {
-        return -1;
-    }
- 
-    pthread_create(&(tid[0]), NULL, &cekoutput, (void *) &clientSockets);
-    pthread_create(&(tid[1]), NULL, &handleInput, (void *) &clientSockets);
- 
-    pthread_join(tid[0], NULL);
-    pthread_join(tid[1], NULL);
- 
-    close(clientSockets);
-    return 0;
-}
    
-void *cekoutput(void *clientSockets) 
-{
-    int fd = *(int *) clientSockets;
+
+void *checkOutput(void *client_sockets){
+
+    int fd = *(int *) client_sockets;
     char message[DATA_BUFFER] = {0};
  
     while (1) {
@@ -174,10 +164,33 @@ void *cekoutput(void *clientSockets)
     }
 }
  
-void serverOutput(int fd, char *input)
-{
+
+
+void serverOutput(int fd, char *input){
+
     if (recv(fd, input, DATA_BUFFER, 0) == 0) {
         printf("Disconnected from server\n");
         exit(EXIT_SUCCESS);
     }
+}
+
+
+
+int main(int argc, char *argv[]){
+
+    pthread_t tid[2];
+    int client_sockets = createSocket();
+ 
+    if (!loginStatus(client_sockets, argc, argv)) {
+        return -1;
+    }
+ 
+    pthread_create(&(tid[0]), NULL, &checkOutput, (void *) &client_sockets);
+    pthread_create(&(tid[1]), NULL, &handleInput, (void *) &client_sockets);
+ 
+    pthread_join(tid[0], NULL);
+    pthread_join(tid[1], NULL);
+ 
+    close(client_sockets);
+    return 0;
 }
