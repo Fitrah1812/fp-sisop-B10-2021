@@ -134,6 +134,16 @@ void *routes(void *argv)
         else if (strcmp(parsed[0], "GRANT") == 0) {
             grantDB(fd, parsed[2], parsed[4]);
         }
+        else if (strcmp(parsed[0], "DROP") == 0)
+        {
+            if(strcmp(parsed[1], "DATABASE") == 0){
+                dropDatabase(parsed[2]);
+            }
+            else if(strcmp(parsed[1], "TABLE") == 0)
+            {
+                dropTable(parsed[2]);
+            }
+        }
         else write(fd, "Invalid query\n\n", SIZE_BUFFER);
     }
     if (fd == curr_fd) {
