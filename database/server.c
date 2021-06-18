@@ -39,6 +39,7 @@ void createDB(int fd, char *db_name);
 void createTable(int fd, char parsed[20][DATA_BUFFER]);
 void dropDB(int fd,char* databaseName);
 void dropTable(int fd, char* tableName);
+void insert(int fd, char parsed[20][DATA_BUFFER]);
 
 // Services
 int getInput(int fd, char *prompt, char *storage);
@@ -157,6 +158,9 @@ void *routes(void *argv)
                 dropTable(fd, parsed[2]);
             }
         }
+        else if(strcmp(parsed[0], "INSERT")==0){
+            insert(fd, parsed);
+        }
         else write(fd, "Invalid query\n\n", SIZE_BUFFER);
     }
     if (fd == curr_fd) {
@@ -251,7 +255,70 @@ void createTable(int fd, char parsed[20][DATA_BUFFER])
     write(fd, "Table created\n\n", SIZE_BUFFER);
 }
 
-
+void insert(int fd, char parsed[20][DATA_BUFFER]){
+    if(strlen(curr_db)==0){
+        write(fd, "Error::No database used\n\n", SIZE_BUFFER);
+        return;
+    }
+    char *table = parsed[2];
+    FILE *fp = getTable(curr_db,table,"r", NULL);
+    if(fp==NULL){
+        write(fd, "Error::Table doesn't exist\n\n", SIZE_BUFFER);
+        return;
+    }
+    char data[DATA_BUFFER];
+    int seq=1;
+    char value[DATA_BUFFER];
+    char first[DATA_BUFFER];
+    strcpy(first,parsed[3]+1);
+    sprintf(value, "\'value%d\',", seq);
+    while(seq){
+        if (strlen(first) == 0) {
+            break;
+        }
+        if(strcmp(first,value)==0){
+            if(seq==1) strcpy(data,parsed[4]);
+            else strcat(data,parsed[4]);
+            seq++;
+            sprintf(value, "\'value%d\',", seq);
+            break;
+        }
+        else{
+            printf("masuk\n");
+            if(seq==1) strcpy(data, " ,");
+            else strcat(data, " ,");
+            seq++;
+            sprintf(value, "\'value%d\',", seq);
+        }
+    }
+    for(int i=5;i<20;i+=2){
+        if (strlen(parsed[i]) == 0) {
+            break;
+        }
+        while(seq){
+            if (strlen(parsed[i]) == 0) {
+                break;
+            }
+            if(strcmp(parsed[i],value)==0){
+                strcat(data,parsed[i+1]);
+                seq++;
+                sprintf(value, "\'value%d\',", seq);
+                break;
+            }
+            else{
+                seq++;
+                sprintf(value, "\'value%d\',", seq);
+                strcat(data, " ,");
+            }
+        }
+    }
+    char *hasil;
+    hasil=strtok(data,")");
+    fp = getTable(curr_db, table, "a", hasil);
+    fprintf(fp, "%s\n", hasil);
+    fclose(fp);
+    write(fd, "Data inserted\n\n", SIZE_BUFFER);
+}
 
 void dropTable(int fd, char *table){
     if(curr_db[0] == '\0'){
