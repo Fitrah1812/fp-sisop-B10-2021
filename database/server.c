@@ -14,15 +14,13 @@
 #include <sys/wait.h>
 
 #define DATA_BUFFER 300
- 
 int curr_fd = -1;
 int curr_id = -1;
 char curr_db[DATA_BUFFER] = {0};
- 
 const int SIZE_BUFFER = sizeof(char) * DATA_BUFFER;
 const char *currDir = "/home/fitrah/fp-sisop-B10-2021/database/databases";
 char *databaseName;
-int create_tcp_server_socket();
+int create_socket();
 void *routes(void *argv);
 bool login(int fd, char *username, char *password);
 void registration(int fd, char *username, char *password);
@@ -51,7 +49,7 @@ int main()
     struct sockaddr_in new_addr;
     pthread_t tid;
     char buf[DATA_BUFFER];
-    int server_fd = create_tcp_server_socket();
+    int server_fd = create_socket();
     int new_fd;
  
     while (1) {
@@ -251,7 +249,7 @@ void insert(int fd, char parsed[20][DATA_BUFFER]){
         return;
     }
     char *table = parsed[2];
-    FILE *fp = getTable(curr_db,table,"r", NULL);
+    FILE *fp = getTable(curr_db,table,"r");
     if(fp==NULL){
         write(fd, "Error::Table doesn't exist\n\n", SIZE_BUFFER);
         return;
@@ -304,7 +302,7 @@ void insert(int fd, char parsed[20][DATA_BUFFER]){
     }
     char *hasil;
     hasil=strtok(data,")");
-    fp = getTable(curr_db, table, "a", hasil);
+    fp = getOrMakeTable(curr_db, table, "a", hasil);
     fprintf(fp, "%s\n", hasil);
     fclose(fp);
     write(fd, "Data inserted\n\n", SIZE_BUFFER);
@@ -360,6 +358,7 @@ void grantDB(int fd, char *db_name, char *username)
     }
 }
  
+
 
 
 void useDB(int fd, char *db_name)
@@ -447,9 +446,8 @@ void registration(int fd, char *username, char *password)
         if (id != -1) {
             write(fd, "Error::User is already registered\n\n", SIZE_BUFFER);
         } else {
-            id = getLastId("config", "users") + 1;
             //printf("current user id = %d",id);
-            fprintf(fp, "%d,%s,%s\n", id, username, password);
+            fprintf(fp, "%s,%s\n", username, password);
             write(fd, "Register success\n\n", SIZE_BUFFER);
         }
         fclose(fp);
@@ -602,14 +600,14 @@ void explode(char string[], char storage[20][DATA_BUFFER], const char *delimiter
  
 
 
-int create_tcp_server_socket()
+int create_socket()
 {
     struct sockaddr_in saddr;
     int fd, ret_val;
     int opt = 1;
     fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (fd == -1) {
-        fprintf(stderr, "socket failed [%s]\n", strerror(errno));
+        //fprintf(stderr, "socket failed [%s]\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
@@ -634,4 +632,3 @@ int create_tcp_server_socket()
     }
     return fd;
 }
- 
