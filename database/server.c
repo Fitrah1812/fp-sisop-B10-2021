@@ -20,7 +20,7 @@ int curr_id = -1;
 char curr_db[DATA_BUFFER] = {0};
  
 const int SIZE_BUFFER = sizeof(char) * DATA_BUFFER;
-const char *currDir = "/home/lathifa/fp-sisop-B10-2021/databaseku/databases";
+const char *currDir = "/home/fitrah/fp-sisop-B10-2021/database/databases";
 
 //global variable
 char *databaseName;
@@ -54,6 +54,8 @@ bool tableExist(int fd, char *db_name, char *table, bool printError);
 
 int main()
 {
+    system("mkdir -p databases");
+    system("mkdir -p databases/config");
     socklen_t addrlen;
     struct sockaddr_in new_addr;
     pthread_t tid;
@@ -128,6 +130,7 @@ void *routes(void *argv)
         else if (strcmp(parsed[0], "CREATE") == 0) {
             if (strcmp(parsed[1], "USER") == 0) {
                 printf("masuk create\n");
+                chdir("/home/fitrah/fp-sisop-B10-2021/database/databases/config");
                 registration(fd, parsed[2], parsed[5]);
             }
             else if (strcmp(parsed[1], "DATABASE") == 0) {
@@ -379,6 +382,7 @@ void registration(int fd, char *username, char *password)
     }else{
         printf("masuk write\n");
         // FILE *fp = getOrMakeTable("config", "users", "a", "id,username,password");
+
         FILE *fp = fopen("users.csv","a");
         // char *cols = NULL;
         int id = getUserId(username, password);
