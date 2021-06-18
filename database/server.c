@@ -8,14 +8,436 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
-#define gas 512-212*1
-#define hadeh 2
+#include <dirent.h>
+#include <time.h>
 
-int socketawal = -1;
-bool socketakhir = false;
-const int ceksize = sizeof(int) * gas;
-const int input = sizeof(int)* gas * 1;
-int create_socket()
+#define DATA_BUFFER 300
+ 
+int curr_fd = -1;
+int curr_id = -1;
+char curr_db[DATA_BUFFER] = {0};
+ 
+const int SIZE_BUFFER = sizeof(char) * DATA_BUFFER;
+const char *currDir = "/home/fitrah/fp-sisop-B10-2021/databaseku/databases";
+ 
+// Socket setup
+int create_tcp_server_socket();
+int *makeDaemon(pid_t *pid, pid_t *sid);
+ 
+// Routes & controller
+void *routes(void *argv);
+bool login(int fd, char *username, char *password);
+void regist(int fd, char *username, char *password);
+void useDB(int fd, char *db_name);
+void grantDB(int fd, char *db_name, char *username);
+void createDB(int fd, char *db_name);
+void createTable(int fd, char parsed[20][DATA_BUFFER]);
+ 
+// Services
+int getInput(int fd, char *prompt, char *storage);
+int getUserId(char *username, char *password);
+int getLastId(char *db_name, char *table);
+void explode(char *string, char storage[20][DATA_BUFFER], const char *delimiter);
+void changeCurrDB(int fd, const char *db_name);
+FILE *getTable(char *db_name, char *table, char *cmd, char *collumns);
+bool dbExist(int fd, char *db_name, bool printError);
+ 
+int main()
+{
+    socklen_t addrlen;
+    struct sockaddr_in new_addr;
+    pthread_t tid;
+    char buf[DATA_BUFFER];
+    int server_fd = create_tcp_server_socket();
+    int new_fd;
+ 
+    while (1) {
+        new_fd = accept(server_fd, (struct sockaddr *)&new_addr, &addrlen);
+        if (new_fd >= 0) {
+            printf("Accepted a new connection with fd: %d\n", new_fd);
+            pthread_create(&tid, NULL, &routes, (void *) &new_fd);
+        } else {
+            fprintf(stderr, "Accept failed [%s]\n", strerror(errno));
+        }
+    }
+    return 0;
+}
+ 
+// void storeToLogs(char *username, char *command)
+// {
+//     time(&my_time);
+// 	timeinfo = localtime(&my_time);
+
+// 	char day[10], month[10], year[10], hour[10], minute[10], second[10];
+
+// 	sprintf(day, "%d", timeinfo->tm_mday);
+// 	if(timeinfo->tm_mday < 10)
+// 		sprintf(day, "0%d", timeinfo->tm_mday);
+
+// 	sprintf(month, "%d", timeinfo->tm_mon+1);
+// 	if(timeinfo->tm_mon+1 < 10)
+// 		sprintf(month, "0%d", timeinfo->tm_mon+1);
+
+// 	sprintf(year, "%d", timeinfo->tm_year+1900);
+
+// 	sprintf(hour, "%d", timeinfo->tm_hour);
+// 	if(timeinfo->tm_hour < 10)
+// 		sprintf(hour, "0%d", timeinfo->tm_hour);
+
+// 	sprintf(minute, "%d", timeinfo->tm_min);
+// 	if(timeinfo->tm_min < 10)
+// 		sprintf(minute, "0%d", timeinfo->tm_min);
+
+// 	sprintf(second, "%d", timeinfo->tm_sec);
+// 	if(timeinfo->tm_sec < 10)
+// 		sprintf(second, "0%d", timeinfo->tm_sec);
+
+//     char content[arraySize];
+//     sprintf(content, "%s-%s-%s %s:%s:%s:%s:%s", year, month, day, hour, minute, second, username, command);
+
+//     FILE* fptr_logs = fopen(logPath, "a");
+//     fprintf(fptr_logs, "%s\r\n", content);
+//     fclose(fptr_logs);
+// }
+
+
+void *routes(void *argv)
+{
+    chdir(currDir); // TODO:: comment on final
+    int fd = *(int *) argv;
+    char query[DATA_BUFFER], buf[DATA_BUFFER];
+    char parsed[20][DATA_BUFFER];
+ 
+    while (read(fd, query, DATA_BUFFER) != 0) {
+        puts(query);
+        explode(query, parsed, " ");
+ 
+        if (strcmp(parsed[0], "LOGIN") == 0) {
+            if (!login(fd, parsed[1], parsed[2]))
+                break;
+        }
+        else if (strcmp(parsed[0], "CREATE") == 0) {
+            if (strcmp(parsed[1], "USER") == 0) {
+                regist(fd, parsed[2], parsed[5]);
+            }
+            else if (strcmp(parsed[1], "DATABASE") == 0) {
+                createDB(fd, parsed[2]);
+            }
+            else if (strcmp(parsed[1], "TABLE") == 0) {
+                createTable(fd, parsed);
+            }
+            else write(fd, "Invalid query on CREATE command\n\n", SIZE_BUFFER);
+        }
+        else if (strcmp(parsed[0], "USE") == 0) {
+            useDB(fd, parsed[1]);
+        }
+        else if (strcmp(parsed[0], "GRANT") == 0) {
+            grantDB(fd, parsed[2], parsed[4]);
+        }
+        else write(fd, "Invalid query\n\n", SIZE_BUFFER);
+    }
+    if (fd == curr_fd) {
+        curr_fd = curr_id = -1;
+        memset(curr_db, '\0', sizeof(char) * DATA_BUFFER);
+    }
+    printf("Close connection with fd: %d\n", fd);
+    close(fd);
+}
+
+void dropDatabase(char* databaseName)
+{
+    char path_temp[100] = "";
+    strcpy(path_temp, databaseName);
+
+    pid_t child_id;
+    child_id = fork();
+
+    int status;
+
+    if (child_id < 0) {
+        printf("Data base failed to drop\n\n");
+        exit(EXIT_FAILURE); // Jika gagal membuat proses baru, program akan berhenti
+    }
+
+    if (child_id == 0) {
+        char *argv[] = {"rm", "-r", path_temp, NULL};
+        execv("/bin/rm", argv);
+    }
+    else{
+        while ((wait(&status)) > 0)
+        {
+            printf("Data base succesfully dropped\n\n");
+            return;
+        }
+        
+    }
+}
+
+void createTable(int fd, char parsed[20][DATA_BUFFER])
+{
+    if (strlen(curr_db) == 0) {
+        write(fd, "Error::No database used\n\n", SIZE_BUFFER);
+        return;
+    }
+    char *table = parsed[2];
+ 
+    // Make sure that table doesn't exist in the current database
+    FILE *fp = getTable(curr_db, table, "r", NULL);
+    if (fp != NULL) {
+        fclose(fp);
+        write(fd, "Error::Table already exists\n\n", SIZE_BUFFER);
+        return;
+    }
+
+    char cols[DATA_BUFFER];
+    strcpy(cols, parsed[3] + 1);
+    for (int i = 5; i < 20; i+=2) {
+        if (strlen(parsed[i]) == 0) {
+            break;
+        }
+        strcat(cols, ",");
+        strcat(cols, parsed[i]);
+    }
+ 
+    fp = getTable(curr_db, table, "a", cols);
+    fclose(fp);
+    write(fd, "Table created\n\n", SIZE_BUFFER);
+}
+ 
+void createDB(int fd, char *db_name)
+{
+    if (dbExist(fd, db_name, false)) {
+        write(fd, "Error::Database already exists\n\n", SIZE_BUFFER);
+        return;
+    }
+    if (mkdir(db_name, 0777) == -1) {
+        write(fd, 
+            "Error::Unknown error occurred when creating new database\n\n", 
+            SIZE_BUFFER);
+        return;
+    }
+    if (curr_id != 0) {
+        FILE *fp = getTable("config", "permissions", "a", "id,db_name");
+        fprintf(fp, "%d,%s\n", curr_id, db_name);
+        fclose(fp);
+    }
+    write(fd, "Database created\n\n", SIZE_BUFFER);
+}
+ 
+void grantDB(int fd, char *db_name, char *username)
+{
+    if (curr_id != 0 || strcmp(db_name, "config") == 0) {
+        write(fd, "Error::Forbidden action\n\n", SIZE_BUFFER);
+        return;
+    }
+    if (!dbExist(fd, db_name, true)) {
+        return;
+    }
+    int target_id = getUserId(username, NULL);
+    if (target_id == -1) {
+        write(fd, "Error::User not found\n\n", SIZE_BUFFER);
+        return;
+    }
+    bool alreadyExist = false;
+ 
+    FILE *fp = getTable("config", "permissions", "r", "id,db_name");
+    char db[DATA_BUFFER], input[DATA_BUFFER];
+    sprintf(input, "%d,%s", target_id, db_name);
+    while (fscanf(fp, "%s", db) != EOF) {
+        if (strcmp(input, db) == 0) {
+            alreadyExist = true;
+            break;
+        }
+    }
+    fclose(fp);
+ 
+    if (alreadyExist) {
+        write(fd, "Info::User already authorized\n\n", SIZE_BUFFER);
+    } else {
+        FILE *fp = getTable("config", "permissions", "a", NULL);
+        fprintf(fp, "%d,%s\n", target_id, db_name);
+        fclose(fp);
+        write(fd, "Permission added\n\n", SIZE_BUFFER);
+    }
+}
+ 
+void useDB(int fd, char *db_name)
+{
+    if (!dbExist(fd, db_name, true)) {
+        return;
+    }
+    DIR *dp = opendir(db_name);
+    bool authorized = false;
+ 
+    if (curr_id != 0) {
+        FILE *fp = getTable("config", "permissions", "r", NULL);
+        if (fp != NULL) {
+            char db[DATA_BUFFER], input[DATA_BUFFER];
+            sprintf(input, "%d,%s", curr_id, db_name);
+            while (fscanf(fp, "%s", db) != EOF) {
+                if (strcmp(input, db) == 0) {
+                    authorized = true;
+                    break;
+                }
+            }
+            fclose(fp);
+        } else {
+            authorized = false;
+        }  
+    } else {
+        authorized = true;
+    }
+ 
+    if (authorized) {
+        changeCurrDB(fd, db_name);
+    } else {
+        write(fd, "Error::Unauthorized access\n\n", SIZE_BUFFER);
+    }
+}
+ 
+void regist(int fd, char *username, char *password)
+{
+    if (curr_id != 0) {
+        write(fd, "Error::Forbidden action\n\n", SIZE_BUFFER);
+        return;
+    }
+ 
+    FILE *fp = getTable("config", "users", "a", "id,username,password");
+    int id = getUserId(username, password);
+ 
+    if (id != -1) {
+        write(fd, "Error::User is already registered\n\n", SIZE_BUFFER);
+    } else {
+        id = getLastId("config", "users") + 1;
+        fprintf(fp, "%d,%s,%s\n", id, username, password);
+        write(fd, "Register success\n\n", SIZE_BUFFER);
+    }
+    fclose(fp);
+}
+ 
+bool login(int fd, char *username, char *password)
+{
+    if (curr_fd != -1) {
+        write(fd, "Server is busy, wait for other user to logout.\n", SIZE_BUFFER);
+        return false;
+    }
+ 
+    int id = -1;
+    if (strcmp(username, "root") == 0) {
+        id = 0;
+    } else { // Check data in DB
+        FILE *fp = getTable("config", "users", "r", NULL);
+        if (fp != NULL) {
+            id = getUserId(username, password);
+            fclose(fp);
+        }
+    }
+ 
+    if (id == -1) {
+        write(fd, "Error::Invalid id or password\n", SIZE_BUFFER);
+        return false;
+    } else {
+        write(fd, "Login success\n", SIZE_BUFFER);
+        curr_fd = fd;
+        curr_id = id;
+    }
+    return true;
+}
+ 
+void changeCurrDB(int fd, const char *db_name)
+{
+    strcpy(curr_db, db_name);
+    write(fd, "change type", SIZE_BUFFER);
+    write(fd, db_name, SIZE_BUFFER);
+}
+ 
+bool dbExist(int fd, char *db_name, bool printError)
+{
+    struct stat s;
+    int err = stat(db_name, &s);
+    if (err == -1 || !S_ISDIR(s.st_mode)) {
+        if (printError) write(fd, "Error::Database not found\n\n", SIZE_BUFFER);
+        return false;
+    }
+    return true;
+}
+ 
+int getUserId(char *username, char *password)
+{
+    int id = -1;
+    FILE *fp = getTable("config", "users", "r", NULL);
+ 
+    if (fp != NULL) {
+        char db[DATA_BUFFER], input[DATA_BUFFER];
+        if (password != NULL) {
+            sprintf(input, "%s,%s", username, password);
+        } else {
+            sprintf(input, "%s", username);
+        }
+        
+        while (fscanf(fp, "%s", db) != EOF) {
+            char *temp = strstr(db, ",") + 1; // Get username and password from db
+            
+            if (password == NULL) {
+                temp = strtok(temp, ",");
+            }
+            if (strcmp(temp, input) == 0) {
+                id = atoi(strtok(db, ","));  // Get id from db
+                break;
+            }
+        }
+        fclose(fp);
+    }
+    return id;
+}
+ 
+int getLastId(char *db_name, char *table)
+{
+    int id = 1;
+    FILE *fp = getTable(db_name, table, "r", NULL);
+ 
+    if (fp != NULL) {
+        char db[DATA_BUFFER];
+        while (fscanf(fp, "%s", db) != EOF) {
+            id = atoi(strtok(db, ","));  // Get id from db
+        }
+    }
+    return id;
+}
+ 
+void explode(char string[], char storage[20][DATA_BUFFER], const char *delimiter)
+{
+    char *buf = string;
+    char *temp = NULL;
+    memset(storage, '\0', sizeof(char) * 20 * DATA_BUFFER);
+ 
+    int i = 0;
+    while ((temp = strtok(buf, delimiter)) != NULL && i < 20) {
+        if (buf != NULL) {
+            buf = NULL;
+        }
+        strcpy(storage[i++], temp);
+    }
+    char *ptr = strchr(storage[--i], ';');
+    if (ptr != NULL) {
+        *ptr = '\0';
+    }
+}
+ 
+FILE *getTable(char *db_name, char *table, char *cmd, char *collumns)
+{
+    char path[DATA_BUFFER];
+    sprintf(path, "./%s/%s.csv", db_name, table);
+ 
+    if (access(path, F_OK) != 0 && collumns != NULL) {
+        FILE *fp = fopen(path, "w");
+        fprintf(fp, "%s\n", collumns);
+        fclose(fp);
+    }
+    return fopen(path, cmd);
+}
+
+int create_tcp_server_socket()
 {
     struct sockaddr_in saddr;
     int fd, ret_val;
@@ -29,6 +451,7 @@ int create_socket()
         perror("setsockopt");
         exit(EXIT_FAILURE);
     }
+    printf("Created a socket with fd: %d\n", fd);
     saddr.sin_family = AF_INET;
     saddr.sin_port = htons(7000);
     saddr.sin_addr.s_addr = INADDR_ANY;
@@ -46,430 +469,4 @@ int create_socket()
     }
     return fd;
 }
-char validator[hadeh][300]; 
-const int SIZE_BUFFER = sizeof(char) * 300;
-void *utama(void *argv);
-void login(char *buf, int fd);
-void daftar(char *buf, int fd);
-void add(char *buf, int fd);
-void download(char *filename, int fd);
-void hapus(char *filename, int fd);
-void see(char *buf, int fd, bool isFind);
-void runninglog(char *cmd, char *filepath);
-int ambilinput(int fd, char *prompt, char *cursor);
-int validasi(int fd, char *id, char *password);
-int masukkanfile(int fd, char *dirname, char *targetFileName);
-int kirim(int fd, char *filename);
-char *ceknamafile(char *filePath);
-bool loginberhasil(FILE *fp, char *id, char *password);
-bool sudahregister(FILE *fp, char *id);
-bool sudahdownload(FILE *fp, char *filename);
-void pemisahfile(char *filepath, char *namafile, char *ext);
-
-int main(int argc ,char const *argv1[])
-{
-    pid_t pid,sid;     
-    pid = fork();
-    if (pid < 0) {
-        exit(EXIT_FAILURE);
-    }
-    /* Keluar saat fork berhasil
-    * (nilai variabel pid adalah PID dari child process) */
-    if (pid > 0) {
-        exit(EXIT_SUCCESS);
-    }
-    umask(0);
-    sid = setsid();
-    if (sid < 0) {
-        exit(EXIT_FAILURE);
-    }
-
-    if ((chdir("/home/fitrah1812/fp-sisop-B10-2021/database")) < 0) {
-        exit(EXIT_FAILURE);
-    }
-
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
-
-    //setelah itu create
-    while (1) {
-        socklen_t addrlen;
-        struct sockaddr_in new_addr;
-        pthread_t tid;
-        char buf[300];
-        char argv[300 + hadeh];
-        int new_fd, ret_val;
-        int server_fd = create_socket();
-        while (1) {
-            new_fd = accept(server_fd, (struct sockaddr *)&new_addr, &addrlen);
-            if (new_fd >= 0) {
-                printf("Koneksi terhubung dengan port: %d\n", new_fd-3);
-                pthread_create(&tid, NULL, &utama, (void *) &new_fd);
-            } else {
-                fprintf(stderr, "Koneksi gagal %s\n", strerror(errno));
-            }
-        }
-    sleep(30);
-    }
-    return 0;
-}
-
-void *utama(void *argv)
-{
-    int fd = *(int *) argv;
-    char cmd[300];
-    chdir("/home/fitrah1812/fp-sisop-B10-2021/database");
-
-    while (recv(fd, cmd, 300, MSG_PEEK | MSG_DONTWAIT) != 0) {
-        if (fd != socketawal) {
-            if (ambilinput(fd, "\nSelamat datang di Aplikasi ini silahkan memilih command berikut(login/register)\nJawaban = ", cmd) == 0) break;
-            write(fd, "\n", SIZE_BUFFER);
-            if (strcmp(cmd, "login") == 0) 
-            {
-                login(cmd, fd);
-            } 
-            else if (strcmp(cmd, "register") == 0) 
-            {
-                daftar(cmd, fd);
-            } 
-            else 
-            {
-                send(fd, "Error: Invalid command\n", SIZE_BUFFER, 0);
-            }
-        } else 
-        { 
-            char prompt[300];
-            strcpy(prompt, "\nSilahkan memilih perintah yang diinginkan(add,downlod,delete,see,find)\nJawaban = ");
-            if (ambilinput(fd, prompt, cmd) == 0) break;
-            write(fd, "\n", SIZE_BUFFER);
-            if (strcmp(cmd, "add") == 0) 
-            {
-                add(cmd, fd);
-            } 
-            else if (strcmp(cmd, "see") == 0) 
-            {
-                see(cmd, fd, false);
-            }
-            else 
-            {
-                //cekking 
-                char *tmp = strtok(cmd, " ");
-                char *tmp2 = strtok(NULL, " ");
-                if (!tmp2) {
-                    send(fd, "Perintah yang ditulis tidak ada\n", SIZE_BUFFER, 0);
-                } 
-                else if (strcasecmp(tmp, "download") == 0) {
-                    download(tmp2, fd);
-                } 
-                else if (strcasecmp(tmp, "delete") == 0) {
-                    hapus(tmp2, fd);
-                }
-                else if (strcasecmp(tmp, "find") == 0) {
-                    see(tmp2, fd, true);
-                }
-                else {
-                    send(fd, "Error: Invalid command\n", SIZE_BUFFER, 0);
-                }
-            }
-        }
-        sleep(0.001);
-    }
-    if (fd == socketawal) 
-    {
-        socketawal = -1;
-    }
-    printf("Koneksi telah terputus diport: %d\n", fd-3);
-    close(fd);
-}
-void see(char *buf, int fd, bool isFind)
-{
-    int counter = 0;
-    FILE *src = fopen("files.tsv", "r");
-    if (!src) {
-        write(fd, "Files.tsv not found\n", SIZE_BUFFER);
-        return;
-    }
-
-    char temp[300 + 85], namafile[300/3], ext[5],
-        filepath[300/3], publisher[300/3], year[10];
-        
-    while (fscanf(src, "%s\t%s\t%s", filepath, publisher, year) != EOF) {
-        pemisahfile(filepath, namafile, ext);
-        if (isFind && strstr(namafile, buf) == NULL) continue;
-        counter++;
-
-        sprintf(temp, 
-            "Nama: %s\nPublisher: %s\nTahun publishing: %s\nEkstensi File: %s\nFilepath: %s\n\n",
-            namafile, publisher, year, ext, filepath
-        );
-        write(fd, temp, SIZE_BUFFER);
-        sleep(0.001);
-    }
-    if(counter == 0) {
-        if (isFind) write(fd, "perintah tersebut tidak ada di files.tsv\n", SIZE_BUFFER);
-        else write(fd, "Data tidak ada di database files.tsv\n", SIZE_BUFFER);
-    } 
-    fclose(src);
-}
-
-void hapus(char *filename, int fd)
-{
-    //buka file
-    FILE *fp = fopen("files.tsv", "a+");
-    char db[300], currFilePath[300], publisher[300], year[300];
-    if (sudahdownload(fp, filename)) {
-        rewind(fp);
-        FILE *tmp_fp = fopen("temp.tsv", "a+");
-        //buat sebuah temp supaya pada saat pertukaran data tidak berubah2
-        while (fgets(db, SIZE_BUFFER, fp)) {
-            sscanf(db, "%s\t%s\t%s", currFilePath, publisher, year);
-            if (strcmp(ceknamafile(currFilePath), filename) != 0) { 
-                fprintf(tmp_fp, "%s", db);
-            }
-            memset(db, 0, SIZE_BUFFER);
-        }
-        fclose(tmp_fp);
-        fclose(fp);
-        remove("files.tsv");
-        rename("temp.tsv", "files.tsv");
-        char deletedFileName[300];
-        sprintf(deletedFileName, "FILES/%s", filename);
-        char newFileName[300];
-        sprintf(newFileName, "FILES/old-%s", filename);
-        rename(deletedFileName, newFileName);
-        send(fd, "File tersebut berhasil dihapus\n", SIZE_BUFFER, 0);
-        runninglog("delete", filename);
-    } 
-    else {
-        send(fd, "File gagal didownload\n", SIZE_BUFFER, 0);
-        fclose(fp);
-    }
-}
-
-void download(char *filename, int fd)
-{
-    FILE *fp = fopen("files.tsv", "a+");
-    if (sudahdownload(fp, filename)) {
-        kirim(fd, filename);
-    } else {
-        send(fd, "File tersebut tidak ada\n", SIZE_BUFFER, 0);
-    }
-    fclose(fp);
-}
-
-void add(char *messages, int fd)
-{
-    char *dirName = "FILES";
-    char publisher[300], year[300], client_path[300];
-    sleep(0.001);
-    if (ambilinput(fd, "Publisher: ", publisher) == 0) return;
-    if (ambilinput(fd, "Tahun Publikasi: ", year) == 0) return;
-    if (ambilinput(fd, "Filepath: ", client_path) == 0) return;
-
-    FILE *fp = fopen("files.tsv", "a+");
-    char *fileName = ceknamafile(client_path);
-
-    if (sudahdownload(fp, fileName)) {
-        send(fd, "File yang anda upload sudah ada\n", SIZE_BUFFER, 0);
-    } else {
-        send(fd, "Memulai mengirimkan file\n", SIZE_BUFFER, 0);
-        mkdir(dirName, 0777);
-        if (masukkanfile(fd, dirName, fileName) == 0) {
-            fprintf(fp, "%s\t%s\t%s\n", client_path, publisher, year);
-            printf("File berhasil dikirimkan\n");
-            runninglog("add", fileName);
-        } else {
-            printf("Error occured when receiving file\n");
-        }
-    }
-    fclose(fp);
-}
-
-void login(char *messages, int fd)
-{
-    if (socketawal != -1) {
-        send(fd, "Server sedang sibuk. Mohon menunggu\n", SIZE_BUFFER, 0);
-        return;
-    }
-    //buka akun
-    char id[300], password[300];
-    FILE *fp = fopen("akun.txt", "a+");
-    //cek apakah berhasil
-    if (validasi(fd, id, password) != 0) {
-        if (loginberhasil(fp, id, password)) {
-            send(fd, "Login berhasil!\n", SIZE_BUFFER, 0);
-            socketawal = fd;
-            strcpy(validator[0], id);
-            strcpy(validator[1], password);
-        } else {
-            send(fd, "Username atau password salah!\n", SIZE_BUFFER, 0);
-        }
-    }
-    fclose(fp);
-}
-
-void daftar(char *messages, int fd)
-{
-    char id[300], password[300];
-    FILE *fp = fopen("akun.txt", "a+");
-
-    if (validasi(fd, id, password) != 0) {
-        if (sudahregister(fp, id)) {
-            send(fd, "Username tersebut sudah ada\n", SIZE_BUFFER, 0);
-        } else {
-            fprintf(fp, "%s:%s\n", id, password);
-            send(fd, "Register akun berhasil\n", SIZE_BUFFER, 0);
-        }
-    }
-    fclose(fp);
-}
-
-void runninglog(char *cmd, char *filename)
-{
-    FILE *fp = fopen("running.log", "a+");
-    cmd = (strcmp(cmd, "add") == 0) ? "Tambah" : "Hapus";
-    fprintf(fp, "%s : %s (%s:%s)\n", cmd, filename, validator[0], validator[1]);
-    fclose(fp);
-}
-
-void pemisahfile(char *filepath, char *namafile, char *ext)
-{
-    char *temp;
-    if (temp = strrchr(filepath, '.')) strcpy(ext, temp + 1);
-    else strcpy(ext, "-");
-    strcpy(namafile, ceknamafile(filepath));
-    strtok(namafile, ".");
-}
-//download
-int kirim(int fd, char *filename)
-{
-    char buf[300] = {0};
-    int ret_val;
-    printf("Mengirimkan file %s ke client\n", filename);
-    strcpy(buf, filename);
-    //mengirimkan ke FILES
-    sprintf(filename, "FILES/%s", buf);
-    FILE *fp = fopen(filename, "r");
-
-    if (!fp) {
-        //cek apabila file tidak ada
-        printf("File tidak ada\n");
-        send(fd, "File tidak ada\n", SIZE_BUFFER, 0);
-        return -1;
-    }
-    send(fd, "Memulai menerima file\n", SIZE_BUFFER, 0);
-    send(fd, buf, SIZE_BUFFER, 0);
-
-    // Transfer size
-    fseek(fp, 0L, SEEK_END);
-    int size = ftell(fp);
-    rewind(fp);
-    sprintf(buf, "%d", size);
-    send(fd, buf, SIZE_BUFFER, 0);
-
-    while ((ret_val = fread(buf, 1, 300, fp)) > 0) {
-        send(fd, buf, ret_val, 0);
-    }
-    recv(fd, buf, 300, 0);
-    printf("File berhasil dikirimkan\n");
-    fclose(fp);
-    return 0;
-}
-
-char *ceknamafile(char *filePath)
-{
-    char *ret = strrchr(filePath, '/');
-    if (ret) return ret + 1;
-    else return filePath;
-}
-
-int masukkanfile(int fd, char *dirname, char *targetFileName)
-{
-    int ret_val, size;
-    char buf[300] = {0};
-    char in[1];
-
-    // Make sure that client has the file
-    ret_val = recv(fd, buf, 300, 0);
-    if (ret_val == 0 || strcmp(buf, "File ditemukan") != 0) {
-        if (ret_val == 0) printf("Koneksi ke client terputus\n");
-        else puts(buf);
-        return -1;
-    }
-    recv(fd, buf, SIZE_BUFFER, 0);
-    size = atoi(buf);
-
-    printf("Mengirimkan file %s ke server\n", targetFileName);
-    sprintf(buf, "%s/%s", dirname,targetFileName);
-    FILE *fp = fopen(buf, "w+");
-
-    while (size-- > 0) {
-        if ((ret_val = recv(fd, in, 1, 0)) < 0)
-            return ret_val;
-        fwrite(in, 1, 1, fp);
-    }
-    ret_val = 0;
-    printf("File berhasil dikirimkan ke server\n");
-    fclose(fp);
-    return ret_val;
-}
-
-int validasi(int fd, char *id, char *password)
-{
-    if (ambilinput(fd, "Masukkan Username = ", id) == 0) return 0;
-    if (ambilinput(fd, "Masukkan Password = ", password) == 0) return 0;
-    return 1;
-}
-
-int ambilinput(int fd, char *prompt, char *cursor)
-{
-    send(fd, prompt, SIZE_BUFFER, 0);
-
-    // Get input
-    int count, ret_val;
-    ioctl(fd, FIONREAD, &count);
-    count /= 300;
-    for (int i = 0; i <= count; i++) {
-        ret_val = recv(fd, cursor, 300, 0);
-        if (ret_val == 0) return ret_val;
-    }
-    while (strcmp(cursor, "") == 0) {
-        ret_val = recv(fd, cursor, 300, 0);
-        if (ret_val == 0) return ret_val;
-    }
-    printf("Command Client = %s\n", cursor);
-    return ret_val;
-}
-
-//login dimasukkan ke file
-bool loginberhasil(FILE *fp, char *id, char *password)
-{
-    char db[300], input[300];
-    sprintf(input, "%s:%s", id, password);
-    while (fscanf(fp, "%s", db) != EOF) {
-        if (strcmp(db, input) == 0) return true;
-    }
-    return false;
-}
-
-//cek sudah regist apa belum
-bool sudahregister(FILE *fp, char *id)
-{
-    char db[300], *tmp;
-    while (fscanf(fp, "%s", db) != EOF) {
-        tmp = strtok(db, ":");
-        if (strcmp(tmp, id) == 0) return true;
-    }
-    return false;
-}
-
-bool sudahdownload(FILE *fp, char *filename)
-{
-    char db[300], *tmp;
-    while (fscanf(fp, "%s", db) != EOF) {
-        tmp = ceknamafile(strtok(db, "\t"));
-        if (strcmp(tmp, filename) == 0) return true;
-    }
-    return false;
-}
+ 
