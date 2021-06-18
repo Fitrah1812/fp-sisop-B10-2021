@@ -121,18 +121,18 @@ bool loginStatus(int fd, int argc, char *argv[]){
     return strcmp(buf, "Login success\n") == 0;
 }
  
-char* uppercase(char *str)
-{
-    int i=0, len=strlen(str);
-	char* ret = malloc((len+1) * sizeof(char));
+// char* uppercase(char *str)
+// {
+//     int i=0, len=strlen(str);
+// 	char* ret = malloc((len+1) * sizeof(char));
     
-    while(str[i])
-    {
-        ret[i] = toupper(str[i]); i++;
-    }
+//     while(str[i])
+//     {
+//         ret[i] = toupper(str[i]); i++;
+//     }
     
-    return ret;
-}
+//     return ret;
+// }
 
 bool isValid(char *message)
 {
